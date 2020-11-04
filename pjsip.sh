@@ -1,6 +1,9 @@
 #!/bin/sh
 
-HAS_VIDEO=1 # set to zero to disable video
+HAS_VIDEO=0 # set to zero to disable video
+HAS_BITCODE=1
+USE_IOS=1
+USE_MAC=0
 
 # see http://stackoverflow.com/a/3915420/318790
 function realpath { echo $(cd $(dirname "$1"); pwd)/$(basename "$1"); }
@@ -9,12 +12,12 @@ __DIR__=`dirname "${__FILE__}"`
 
 # download
 function download() {
-    "${__DIR__}/download.sh" "$1" "$2" #--no-cache
+    "${__DIR__}/download.sh" "$1" "$2" --no-cache
 }
 
 DEVELOPER=$(xcode-select --print-path)
 
-IPHONEOS_DEPLOYMENT_VERSION=${IOS_MIN_SDK_VERSION:-"9.0"}
+IPHONEOS_DEPLOYMENT_VERSION=${IOS_MIN_SDK_VERSION:-"11.0"}
 IPHONEOS_PLATFORM=$(xcrun --sdk iphoneos --show-sdk-platform-path)
 IPHONEOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
 
@@ -26,7 +29,11 @@ OSX_PLATFORM=$(xcrun --sdk macosx --show-sdk-platform-path)
 OSX_SDK=$(xcrun --sdk macosx --show-sdk-path)
 
 BASE_DIR="$1"
-PJSIP_URL="http://www.pjsip.org/release/${PJSIP_VERSION:-2.9}/pjproject-${PJSIP_VERSION:-2.9}.tar.bz2"
+#PJSIP_URL="https://www.dropbox.com/s/o9enofl0co1txou/pjproject-pjsip2.11-pre2.tar.gz"
+PJSIP_URL="https://www.dropbox.com/s/mirbvsl0mxulj6d/pjproject-ios_1-8-6.tar.gz"
+#PJSIP_URL="https://github.com/revcomm/pjproject/archive/ios_1-8-6.tar.gz"
+#PJSIP_URL="https://github.com/pjsip/pjproject/archive/2.10.tar.gz"
+#PJSIP_URL="http://www.pjsip.org/release/${PJSIP_VERSION:-2.10}/pjproject-${PJSIP_VERSION:-2.10}.tar.bz2"
 PJSIP_DIR="$1/src"
 LIB_PATHS=("pjlib/lib" \
            "pjlib-util/lib" \
@@ -77,7 +84,6 @@ function configure () {
 		rm "${PJSIP_CONFIG_PATH}"
 	fi
 
-
 	if [ "$TYPE" == "macos" ]; then
 		# macOS
 		# Disable SDL (default: not disabled), not available on every platform
@@ -89,20 +95,23 @@ function configure () {
 		echo "#define PJ_CONFIG_IPHONE 1" >> "${PJSIP_CONFIG_PATH}"
 		echo "#undef PJ_IPHONE_OS_HAS_MULTITASKING_SUPPORT" >> "${PJSIP_CONFIG_PATH}"
 		echo "#define PJ_IPHONE_OS_HAS_MULTITASKING_SUPPORT 0" >> "${PJSIP_CONFIG_PATH}" # for iOS 9+
-		if [[ ${HAS_VIDEO} ]]; then
-			echo "#define PJMEDIA_VIDEO_DEV_HAS_OPENGL 1" >> "${PJSIP_CONFIG_PATH}"
-			echo "#define PJMEDIA_VIDEO_DEV_HAS_OPENGL_ES 1" >> "${PJSIP_CONFIG_PATH}"
-			echo "#define PJMEDIA_VIDEO_DEV_HAS_IOS_OPENGL 1" >> "${PJSIP_CONFIG_PATH}"
-			echo "#include <OpenGLES/ES3/glext.h>" >> "${PJSIP_CONFIG_PATH}"
-		fi
+		#if [[ ${HAS_VIDEO} ]]; then
+		#	echo "#define PJMEDIA_VIDEO_DEV_HAS_OPENGL 1" >> "${PJSIP_CONFIG_PATH}"
+		#	echo "#define PJMEDIA_VIDEO_DEV_HAS_OPENGL_ES 1" >> "${PJSIP_CONFIG_PATH}"
+		#	echo "#define PJMEDIA_VIDEO_DEV_HAS_IOS_OPENGL 1" >> "${PJSIP_CONFIG_PATH}"
+		#	echo "#include <OpenGLES/ES3/glext.h>" >> "${PJSIP_CONFIG_PATH}"
+		#fi
 	fi
 
-	if [[ ${HAS_VIDEO} ]]; then
-		echo "#define PJMEDIA_HAS_VIDEO 1" >> "${PJSIP_CONFIG_PATH}"
-		echo "#define PJMEDIA_HAS_VID_TOOLBOX_CODEC 1" >> "${PJSIP_CONFIG_PATH}"
-	fi
+	#if [[ ${HAS_VIDEO} ]]; then
+	#	echo "#define PJMEDIA_HAS_VIDEO 1" >> "${PJSIP_CONFIG_PATH}"
+	#	echo "#define PJMEDIA_HAS_VID_TOOLBOX_CODEC 1" >> "${PJSIP_CONFIG_PATH}"
+	#fi
 
+	echo "#define PJ_HAS_SSL_SOCK 1" >> "${PJSIP_CONFIG_PATH}" # ssl
 	echo "#define PJ_HAS_IPV6 1" >> "${PJSIP_CONFIG_PATH}" # Enable IPV6
+	echo "#define PJMEDIA_SRTP_HAS_DTLS 1" >> "${PJSIP_CONFIG_PATH}" # Enable IPV6
+	echo "#define MIITEL_SIP 1" >> "${PJSIP_CONFIG_PATH}" # Enable IPV6
 	echo "#include <pj/config_site_sample.h>" >> "${PJSIP_CONFIG_PATH}" # Include example config
 
 	# flags
@@ -125,8 +134,11 @@ function configure () {
 			export CFLAGS="${CFLAGS}"
 			export LDFLAGS="${LDFLAGS}"
 		fi
+		
+		if [[ ${HAS_BITCODE} ]]; then
+			export CFLAGS="${CFLAGS}  -fembed-bitcode"
+		fi
 	fi
-
 
 	if [[ ${OPENSSL_PREFIX} ]]; then
 		CONFIGURE="${CONFIGURE} --with-ssl=${OPENSSL_PREFIX}"
@@ -134,6 +146,8 @@ function configure () {
 	if [[ ${OPUS_PREFIX} ]]; then
 		CONFIGURE="${CONFIGURE} --with-opus=${OPUS_PREFIX}"
 	fi
+	
+	CONFIGURE="${CONFIGURE} --disable-darwin-ssl"
 
 	# flags
 	if [[ ! ${CFLAGS} ]]; then
@@ -173,6 +187,7 @@ function build () {
 
 	LOG=${BASE_DIR}/${TYPE}-${ARCH}.log
 
+	make clean
 	configure $TYPE $ARCH $LOG
 
 	echo "Building for ${TYPE} ${ARCH}..."
@@ -241,7 +256,8 @@ function do_lipo() {
 
 			if [ "$OPTIONS" != "" ]; then
 				OUTPUT_PREFIX=$(dirname "${DST_DIR}")
-				OUTPUT="${OUTPUT_PREFIX}/lib/${PATTERN_FILE/-$1-/-}"
+				outputfilename=`echo ${PATTERN_FILE} | sed -e "s/-x86_64-apple-darwin_ios//g" | sed -e "s/-arm64-apple-darwin_ios//g"`
+				OUTPUT="${OUTPUT_PREFIX}/lib/${outputfilename}"
 
 				OPTIONS="${OPTIONS} -create -output ${OUTPUT}"
 				echo "$OPTIONS" >> "${TMP}"
@@ -256,15 +272,20 @@ function do_lipo() {
 
 download "${PJSIP_URL}" "${PJSIP_DIR}"
 
+if [[ ${USE_IOS} ]]; then
+  #build "i386" "${IPHONESIMULATOR_SDK}" "ios"
+  build "x86_64" "${IPHONESIMULATOR_SDK}" "ios"
+  #build "armv7" "${IPHONEOS_SDK}" "ios"
+  #build "armv7s" "${IPHONEOS_SDK}" "ios"
+  build "arm64" "${IPHONEOS_SDK}" "ios"	
+  
+  #do_lipo "ios" "i386" "x86_64" "armv7" "armv7s" "arm64"
+  do_lipo "ios" "x86_64" "arm64"
+fi
 
-build "i386" "${IPHONESIMULATOR_SDK}" "ios"
-build "x86_64" "${IPHONESIMULATOR_SDK}" "ios"
-build "armv7" "${IPHONEOS_SDK}" "ios"
-build "armv7s" "${IPHONEOS_SDK}" "ios"
-build "arm64" "${IPHONEOS_SDK}" "ios"
-
-# We don't support x86 for macOS.
-build "x86_64" "${OSX_SDK}" "macos"
-
-do_lipo "ios" "i386" "x86_64" "armv7" "armv7s" "arm64"
-do_lipo "macos" "x86_64"
+#if [[ ${USE_MAC} ]]; then
+  # We don't support x86 for macOS.
+  #build "x86_64" "${OSX_SDK}" "macos"
+  #build "x86_64" "${OSX_SDK}" "macos"
+  #do_lipo "macos" "x86_64"
+#fi

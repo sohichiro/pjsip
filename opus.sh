@@ -23,8 +23,8 @@
 #  Choose your libopus version and your currently-installed iOS SDK version:
 #
 VERSION=${OPUS_VERSION:-"1.3.1"}
-SDKVERSION="12.2"
-MINIOSVERSION=${IOS_MIN_SDK_VERSION:-"8.0"}
+SDKVERSION=$(xcrun --sdk iphoneos --show-sdk-version)
+MINIOSVERSION=${IOS_MIN_SDK_VERSION:-"11.0"}
 
 ###########################################################################
 #
@@ -35,11 +35,11 @@ MINIOSVERSION=${IOS_MIN_SDK_VERSION:-"8.0"}
 # by default, we won't build for debugging purposes
 if [ "${DEBUG}" == "true" ]; then
     echo "Compiling for debugging ..."
-    OPT_CFLAGS="-O0 -fno-inline -g"
+    OPT_CFLAGS="-O0 -fno-inline -g -fembed-bitcode"
     OPT_LDFLAGS=""
     OPT_CONFIG_ARGS="--enable-assertions --disable-asm"
 else
-    OPT_CFLAGS="-Ofast -flto -g"
+    OPT_CFLAGS="-Ofast -flto -g -fembed-bitcode"
     OPT_LDFLAGS="-flto"
     OPT_CONFIG_ARGS=""
 fi
@@ -47,7 +47,7 @@ fi
 
 # No need to change this since xcode build will only compile in the
 # necessary bits from the libraries we create
-ARCHS="armv7 armv7s arm64 i386 x86_64"
+ARCHS="arm64 x86_64"
 
 DEVELOPER=`xcode-select -print-path`
 #DEVELOPER="/Applications/Xcode.app/Contents/Developer"

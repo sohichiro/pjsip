@@ -1,11 +1,11 @@
 #!/bin/sh
 
 # environment variables
-export OPENSSL_VERSION="1.1.1c" # specify the openssl version to use
-export PJSIP_VERSION="2.9"
+export OPENSSL_VERSION="1.1.1h" # specify the openssl version to use
+export PJSIP_VERSION="2.10"
 export OPUS_VERSION="1.3.1"
 export MACOS_MIN_SDK_VERSION="10.12"
-export IOS_MIN_SDK_VERSION="9.0"
+export IOS_MIN_SDK_VERSION="11.0"
 
 # see http://stackoverflow.com/a/3915420/318790
 function realpath { echo $(cd $(dirname "$1"); pwd)/$(basename "$1"); }
@@ -19,18 +19,18 @@ fi
 
 # download
 function download() {
-    "${__DIR__}/download.sh" "$1" "$2" #--no-cache
+    "${__DIR__}/download.sh" "$1" "$2" --no-cache
 }
 
 # openssl
 OPENSSL_DIR="${BUILD_DIR}/openssl"
 OPENSSL_ENABLED=
 function openssl() {
-    if [ ! -d "${OPENSSL_DIR}/lib/iOS" ] || [ ! -d "${OPENSSL_DIR}/lib/macOS" ]; then
+    if [ ! -d "${OPENSSL_DIR}/lib/ios" ]; then
         if [ ! -d "${OPENSSL_DIR}" ]; then
             mkdir -p "${OPENSSL_DIR}"
         fi
-        "${__DIR__}/openssl/openssl.sh" "--version=${OPENSSL_VERSION}" "--reporoot=${OPENSSL_DIR}" "--macos-min-sdk=${MACOS_MIN_SDK_VERSION}" "--ios-min-sdk=${IOS_MIN_SDK_VERSION}"
+        "${__DIR__}/openssl/openssl.sh" "--version=${OPENSSL_VERSION}" "--reporoot=${OPENSSL_DIR}" "--ios-min-sdk=${IOS_MIN_SDK_VERSION}"
     else
         echo "Using OpenSSL..."
     fi
